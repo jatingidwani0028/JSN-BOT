@@ -9,6 +9,7 @@ _DB = str(DATABASE_PATH)
 
 
 async def get_db() -> aiosqlite.Connection:
+    """Open and return a new async DB connection."""
     conn = await aiosqlite.connect(_DB)
     conn.row_factory = aiosqlite.Row
     await conn.execute("PRAGMA journal_mode=WAL")
@@ -20,7 +21,8 @@ async def get_db() -> aiosqlite.Connection:
 
 async def init_db() -> None:
     logger.info("Initialising database at %s", _DB)
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         await db.execute("""
             CREATE TABLE IF NOT EXISTS folders (
                 id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -53,4 +55,6 @@ async def init_db() -> None:
             ON folders(folder_name)
         """)
         await db.commit()
-    logger.info("Database ready.")
+        logger.info("Database ready.")
+    finally:
+        await db.close()
