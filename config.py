@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 
 # ── Bot token ─────────────────────────────────────────────────────────────────
-BOT_TOKEN: str = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
+BOT_TOKEN: str = os.getenv("BOT_TOKEN", "8699319947:AAEUI0J648CvcotNwQ5lTdBmLqP_2WDE3Kg")
 
 # ── Admin user IDs ────────────────────────────────────────────────────────────
 # Get your ID by messaging @userinfobot on Telegram, then replace 123456789.
