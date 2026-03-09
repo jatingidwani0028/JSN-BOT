@@ -12,7 +12,7 @@ BOT_TOKEN: str = os.getenv("BOT_TOKEN", "YOUR_BOT_TOKEN_HERE")
 # ── Admin user IDs ────────────────────────────────────────────────────────────
 # Get your ID by messaging @userinfobot on Telegram, then replace 123456789.
 ADMIN_IDS: list[int] = [
-    123456789,
+    8403558393,
 ]
 
 # ── Storage paths ─────────────────────────────────────────────────────────────
