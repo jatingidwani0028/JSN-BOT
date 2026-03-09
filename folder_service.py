@@ -11,39 +11,48 @@ logger = logging.getLogger(__name__)
 
 async def create_folder(folder_name: str) -> tuple[bool, str]:
     folder_name = folder_name.strip().lower()
-    if not all(c.isalnum() or c == "_" for c in folder_name) or not folder_name:
+    if not folder_name or not all(c.isalnum() or c == "_" for c in folder_name):
         return False, "❌ Invalid folder name. Use only letters, numbers, and underscores."
 
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             "SELECT id FROM folders WHERE folder_name = ?", (folder_name,)
         ) as cur:
             if await cur.fetchone():
-                return False, f"⚠️ Folder *{folder_name}* already exists."
+                return False, f"⚠️ Folder '{folder_name}' already exists."
         await db.execute("INSERT INTO folders (folder_name) VALUES (?)", (folder_name,))
         await db.commit()
+    finally:
+        await db.close()
 
     create_folder_on_disk(folder_name)
     logger.info("Created folder: %s", folder_name)
-    return True, f"✅ Folder *{folder_name}* created successfully."
+    return True, f"✅ Folder '{folder_name}' created successfully."
 
 
 async def list_folders() -> list[Folder]:
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             "SELECT id, folder_name, created_at FROM folders ORDER BY folder_name"
         ) as cur:
             rows = await cur.fetchall()
+    finally:
+        await db.close()
     return [Folder(id=r["id"], folder_name=r["folder_name"], created_at=r["created_at"]) for r in rows]
 
 
 async def get_folder_by_name(folder_name: str) -> Optional[Folder]:
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             "SELECT id, folder_name, created_at FROM folders WHERE folder_name = ?",
             (folder_name.lower(),),
         ) as cur:
             row = await cur.fetchone()
+    finally:
+        await db.close()
     if row:
         return Folder(id=row["id"], folder_name=row["folder_name"], created_at=row["created_at"])
     return None
@@ -53,7 +62,8 @@ async def get_folder_stats(folder_name: str) -> Optional[FolderStats]:
     folder = await get_folder_by_name(folder_name)
     if not folder:
         return None
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             """
             SELECT
@@ -65,6 +75,8 @@ async def get_folder_stats(folder_name: str) -> Optional[FolderStats]:
             (folder.id,),
         ) as cur:
             row = await cur.fetchone()
+    finally:
+        await db.close()
     return FolderStats(
         folder_name=folder.folder_name,
         total=row["total"] or 0,
