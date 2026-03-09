@@ -23,9 +23,10 @@ async def save_json_file(folder_name: str, content: bytes) -> tuple[bool, str]:
 
     folder = await get_folder_by_name(folder_name)
     if not folder:
-        return False, f"❌ Folder *{folder_name}* does not exist. Create it first with /create\\_folder."
+        return False, f"❌ Folder '{folder_name}' does not exist. Create it first with /create_folder."
 
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             "SELECT COALESCE(MAX(json_number), 0) + 1 FROM json_files WHERE folder_id = ?",
             (folder.id,),
@@ -39,59 +40,67 @@ async def save_json_file(folder_name: str, content: bytes) -> tuple[bool, str]:
             (folder.id, next_number, str(file_path)),
         )
         await db.commit()
+    finally:
+        await db.close()
 
     logger.info("Saved JSON #%d to folder '%s'", next_number, folder_name)
-    return True, f"✅ JSON saved as *\\#{next_number}* in folder *{folder_name}*."
+    return True, f"✅ JSON saved as #{next_number} in folder '{folder_name}'."
 
 
 async def get_json_file(folder_name: str, json_number: int) -> tuple[Optional[Path], str]:
     folder = await get_folder_by_name(folder_name)
     if not folder:
-        return None, f"❌ Folder *{folder_name}* not found."
+        return None, f"❌ Folder '{folder_name}' not found."
 
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             "SELECT file_path FROM json_files WHERE folder_id = ? AND json_number = ?",
             (folder.id, json_number),
         ) as cur:
             row = await cur.fetchone()
+    finally:
+        await db.close()
 
     if not row:
-        return None, f"❌ JSON *\\#{json_number}* not found in folder *{folder_name}*."
-
+        return None, f"❌ JSON #{json_number} not found in folder '{folder_name}'."
     path = Path(row["file_path"])
     if not path.exists():
-        return None, f"❌ File for JSON *\\#{json_number}* is missing on disk."
-    return path, f"📄 Sending JSON file *\\#{json_number}* from *{folder_name}*"
+        return None, f"❌ File for JSON #{json_number} is missing on disk."
+    return path, f"📄 Sending JSON file #{json_number} from '{folder_name}'"
 
 
 async def set_json_status(folder_name: str, json_number: int, status: str) -> tuple[bool, str]:
     folder = await get_folder_by_name(folder_name)
     if not folder:
-        return False, f"❌ Folder *{folder_name}* not found."
+        return False, f"❌ Folder '{folder_name}' not found."
 
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             "SELECT id FROM json_files WHERE folder_id = ? AND json_number = ?",
             (folder.id, json_number),
         ) as cur:
             row = await cur.fetchone()
         if not row:
-            return False, f"❌ JSON *\\#{json_number}* not found in *{folder_name}*."
+            return False, f"❌ JSON #{json_number} not found in '{folder_name}'."
         await db.execute("UPDATE json_files SET status = ? WHERE id = ?", (status, row["id"]))
         await db.commit()
+    finally:
+        await db.close()
 
     emoji = "✅" if status == "USED" else "🔄"
     logger.info("Marked JSON #%d in '%s' as %s", json_number, folder_name, status)
-    return True, f"{emoji} JSON *\\#{json_number}* in *{folder_name}* marked as *{status}*."
+    return True, f"{emoji} JSON #{json_number} in '{folder_name}' marked as {status}."
 
 
 async def get_unused_json_numbers(folder_name: str) -> tuple[list[int], str]:
     folder = await get_folder_by_name(folder_name)
     if not folder:
-        return [], f"❌ Folder *{folder_name}* not found."
+        return [], f"❌ Folder '{folder_name}' not found."
 
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             """
             SELECT json_number FROM json_files
@@ -101,15 +110,18 @@ async def get_unused_json_numbers(folder_name: str) -> tuple[list[int], str]:
             (folder.id, UNUSED_DISPLAY_LIMIT),
         ) as cur:
             rows = await cur.fetchall()
+    finally:
+        await db.close()
     return [r["json_number"] for r in rows], ""
 
 
 async def get_next_unused(folder_name: str) -> tuple[Optional[Path], int, str]:
     folder = await get_folder_by_name(folder_name)
     if not folder:
-        return None, 0, f"❌ Folder *{folder_name}* not found."
+        return None, 0, f"❌ Folder '{folder_name}' not found."
 
-    async with await get_db() as db:
+    db = await get_db()
+    try:
         async with db.execute(
             """
             SELECT id, json_number, file_path FROM json_files
@@ -119,13 +131,14 @@ async def get_next_unused(folder_name: str) -> tuple[Optional[Path], int, str]:
             (folder.id,),
         ) as cur:
             row = await cur.fetchone()
+    finally:
+        await db.close()
 
     if not row:
-        return None, 0, f"⚠️ No unused JSON files in *{folder_name}*."
-
+        return None, 0, f"⚠️ No unused JSON files in '{folder_name}'."
     path = Path(row["file_path"])
     if not path.exists():
-        return None, row["json_number"], f"❌ File for JSON *\\#{row['json_number']}* missing on disk."
+        return None, row["json_number"], f"❌ File for JSON #{row['json_number']} missing on disk."
     return path, row["json_number"], ""
 
 
@@ -148,12 +161,12 @@ async def preview_json(folder_name: str, json_number: int) -> tuple[str, str]:
 async def backup_folder(folder_name: str) -> tuple[Optional[Path], str]:
     folder = await get_folder_by_name(folder_name)
     if not folder:
-        return None, f"❌ Folder *{folder_name}* not found."
+        return None, f"❌ Folder '{folder_name}' not found."
 
     folder_disk_path = JSON_STORAGE_DIR / folder_name
     json_files = list(folder_disk_path.glob("*.json")) if folder_disk_path.exists() else []
     if not json_files:
-        return None, f"⚠️ No JSON files found in *{folder_name}*."
+        return None, f"⚠️ No JSON files found in '{folder_name}'."
 
     tmp = Path(tempfile.mktemp(suffix=f"_{folder_name}_backup.zip"))
     with zipfile.ZipFile(tmp, "w", zipfile.ZIP_DEFLATED) as zf:
@@ -161,4 +174,4 @@ async def backup_folder(folder_name: str) -> tuple[Optional[Path], str]:
             zf.write(jf, arcname=jf.name)
 
     logger.info("Backup created for '%s': %d files", folder_name, len(json_files))
-    return tmp, f"🗜️ Backup of *{folder_name}* — {len(json_files)} files."
+    return tmp, f"🗜️ Backup of '{folder_name}' — {len(json_files)} files."
